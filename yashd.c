@@ -28,6 +28,7 @@ DESCRIPTION:
 #include <pthread.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <malloc.h>
 #include <errno.h>
@@ -45,6 +46,11 @@ static char u_pid_path[PATHMAX+1];
 void reusePort(int sock);
 void ThreadServe(void *arg);
 void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp);
+void parseString(char * str);
+void jobsMonitor();
+void removeProcesses();
+int getInfoPid(int pid);
+int getInfoTid(pthread_t tid);
 
 struct info_t *info_table;
 int table_index = 0;
@@ -197,7 +203,7 @@ int main(int argc, char **argv ) {
     int length;
     char ThisHost[80];
     int pn;
-    int childpid;
+    //int childpid;
     uint16_t server_port = 3826;
 
     ret = sem_init(&my_sem, 0, 1);
@@ -284,7 +290,7 @@ int main(int argc, char **argv ) {
 	thr_data.from = from;
 	thr_data.psd = psd;
 	info_table[table_index].sock = psd;
-	if (pthread_create(&thr[i], NULL, ThreadServe, &thr_data) != 0) 
+	if (pthread_create(&thr[i], NULL, (void *)ThreadServe, &thr_data) != 0) 
 	{
  		fprintf(stderr, "error: pthread_create");
    	}
@@ -312,8 +318,8 @@ void ThreadServe(void *arg) {
     int childpid;
     struct  hostent *hp, *gethostbyname();
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-    char *buf_copy;
-    char **args;
+    //char *buf_copy;
+    //char **args;
 
     //printf("Serving %s:%d\n", inet_ntoa(from.sin_addr),
 	//   ntohs(from.sin_port));
@@ -331,6 +337,8 @@ void ThreadServe(void *arg) {
         /**  get data from  client and send it back */
         for(;;){
 		//printf("\n...server is waiting...\n");
+		printf("\n#");
+	    	fflush(stdout);
 		if( (rc=recv(psd, &buf, sizeof(buf), 0)) < 0){
 	    		perror("receiving stream  message");
 	    		exit(-1);
@@ -339,7 +347,7 @@ void ThreadServe(void *arg) {
 		if (rc > 0){
 			pthread_mutex_lock(&lock);
 			buf[rc] = '\0';
-	    		buf[rc-1]='\0';
+	    		//buf[rc-1]='\0';
 			/* ADD BACK IN LATER */
 //			write_to_log(buf, rc, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
 
@@ -348,13 +356,17 @@ void ThreadServe(void *arg) {
 		   	//	ntohs(from.sin_port));
 	    		//printf("(Name is : %s)\n", hp->h_name);
 
+			shell_pid = getInfoTid(pthread_self())].shell_pid;
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
-			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
+			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
 			
 			if(strstr(buf, "CTL ") != NULL)
 			{
-				head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
-				if (strcmp(args[1], "c") == 0)
+				size_t length = strlen("CTL ");
+				char* inString_cpy[1+strlen(buf+length)];
+				memmove(inString_cpy, buf+length, 1+strlen(buf+length));
+				//head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
+				if (strcmp(inString_cpy, "c\n") == 0)
 				{
 					kill(-1*head->pid, SIGINT);
 					if(tail->prev == NULL)
@@ -368,28 +380,45 @@ void ThreadServe(void *arg) {
 						temp->next = NULL;
 						tail = temp;
 					}
-					break;
+					//break;
 
 				}
-				else if (strcmp(args[1], "z") == 0)
+				else if (strcmp(inString_cpy, "z\n") == 0)
 				{
 					head->state = 1;
 					kill(-1*head->pid, SIGTSTP);
+					//break;
+				}
+				else if (strcmp(inString_cpy, "d\n") == 0)
+				{
+					struct process * current = head;
+					while (current != NULL)
+					{
+						kill(-1*current->pid, SIGINT);
+						current = current->next;
+						current->prev = NULL;
+					}
+					//close(psd);
 					break;
 				}
+				free(inString_cpy);
 			}
 			if(strstr(buf, "CMD ") != NULL)
 			{
 				size_t length = strlen("CMD ");
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length)); 
+				if (strcmp(inString_cpy, "exit\n") == 0)
+				{
+					//close(psd);
+					break;
+				}
 				parseString((char *)inString_cpy);
 				removeProcesses();
 				jobsMonitor();
+				//free(inString_cpy);
 			}
 			pthread_mutex_unlock(&lock);
-			printf("\n# ");
-	    		fflush(stdout);
 		}
 		else {
 	    		//printf("TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
@@ -402,7 +431,7 @@ void ThreadServe(void *arg) {
 	}
     }
     else {
-        //close(psd);
+        close(psd);
     }
 }
 
@@ -443,7 +472,7 @@ void reusePort(int s)
 
 void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp)
 {
-	FILE *log;
+	//FILE *log;
 	time_t cur_time;
 	char *c_time;
 
@@ -474,7 +503,6 @@ void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp)
 	strcat(final, port);
 	strcat(final, "] ");
 	strcat(final, buff);
-	strcat(final, "\n");
 
 	while (ret != 0)
 	{
@@ -489,7 +517,7 @@ void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp)
 		}
 	}
 	
-	dprintf(2, final);
+	dprintf(2, "%s\n", final);
 	
 /*	log = fopen(u_log_path, "aw");
 	if(log)
@@ -736,14 +764,14 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 		/* If invalid command, simply ignore it and print a new line */
       		if (execvp(args[0], args) < 0)
       		{
-          		printf("");
+          		//printf("\n");
 			/* remove from jobs list */
 			if (head->next == NULL)
 				head = NULL;
 			else
 				tail = NULL;
       		}
-		exit(0);
+		//_exit(0);
 	}
 	else
 	{
@@ -899,7 +927,7 @@ void parseString(char * str)
 	}
 	else if (strcmp(args[0], "exit") == 0)
 	{
-		_exit(0);
+		return;
 	}
 
 	/* handle piping */
