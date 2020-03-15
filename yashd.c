@@ -356,6 +356,7 @@ void ThreadServe(void *arg) {
 		   	//	ntohs(from.sin_port));
 	    		//printf("(Name is : %s)\n", hp->h_name);
 
+			shell_pid = getInfoTid(pthread_self())].shell_pid;
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
 			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
 			
@@ -365,7 +366,7 @@ void ThreadServe(void *arg) {
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length));
 				//head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
-				if (strcmp(inString_cpy, "c") == 0)
+				if (strcmp(inString_cpy, "c\n") == 0)
 				{
 					kill(-1*head->pid, SIGINT);
 					if(tail->prev == NULL)
@@ -382,13 +383,13 @@ void ThreadServe(void *arg) {
 					//break;
 
 				}
-				else if (strcmp(inString_cpy, "z") == 0)
+				else if (strcmp(inString_cpy, "z\n") == 0)
 				{
 					head->state = 1;
 					kill(-1*head->pid, SIGTSTP);
 					//break;
 				}
-				else if (strcmp(inString_cpy, "d") == 0)
+				else if (strcmp(inString_cpy, "d\n") == 0)
 				{
 					struct process * current = head;
 					while (current != NULL)
@@ -400,7 +401,7 @@ void ThreadServe(void *arg) {
 					//close(psd);
 					break;
 				}
-				//free(inString_cpy);
+				free(inString_cpy);
 			}
 			if(strstr(buf, "CMD ") != NULL)
 			{
