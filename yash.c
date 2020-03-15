@@ -28,19 +28,18 @@ char rbuf[BUFSIZE];
 void GetUserInput();
 void cleanup(char *buf);
 
-
 int rc, cc;
 int   sd;
 
 int main(int argc, char **argv ) {
     int childpid;
     struct sockaddr_in server;
-    struct sockaddr_in client;
+    //struct sockaddr_in client;
     struct hostent *hp, *gethostbyname();
     struct sockaddr_in from;
     struct sockaddr_in addr;
     int fromlen;
-    int length;
+    //int length;
     char ThisHost[80];
     uint16_t server_port = 3826;
     
@@ -124,8 +123,6 @@ int main(int argc, char **argv ) {
 	if (rc > 0){
 	    rbuf[rc]='\0';
 	    printf("%s\n", rbuf);
-	    //printf("\n# ");
-	    //fflush(stdout);
 	}else {
 	    printf("Disconnected..\n");
 	    close (sd);
@@ -157,6 +154,28 @@ static void c_sig_handler(int signo)
     	}
 }
 
+static void c_sig_handler_eof(int signo) 
+{
+	switch(signo)
+	{
+		case 0:	 
+			cleanup(buf);
+			strcpy(buf, "CTL d\n");
+			rc = strlen(buf);
+			if (write(sd, buf, rc) < 0)
+				perror("sending stream message");
+			cleanup(buf);
+
+		case 1:
+			cleanup(buf);
+			strcpy(buf, "CMD exit\n");
+			rc = strlen(buf);
+			if (write(sd, buf, rc) < 0)
+				perror("sending stream message");
+			cleanup(buf);
+	}
+}
+
 void cleanup(char *buf)
 {
     int i;
@@ -170,16 +189,24 @@ void GetUserInput()
     if(signal(SIGTSTP, c_sig_handler) == SIG_ERR)
         printf("signal(SIGTSTP)error");
     char cmd[] = "CMD ";
-    printf("\n# ");
-    fflush(stdout);
+    //printf("\n# ");
+    //fflush(stdout);
     for(;;) 
     {
 	cleanup(buf);
 	rc = read(0, buf, sizeof(buf));
 	if (rc == 0) 
+	{
+		c_sig_handler_eof(0);
 		break;
+	}
+	buf[rc] = '\0';
+	buf[rc-1] = '\0'; 
 	if(strcmp(buf, "exit") == 0)
-		exit(0);
+	{
+		c_sig_handler_eof(1);
+		break;
+	}
 	char* yash_buf = strdup(buf);
 	strcpy(buf, cmd);
 	strcat(buf, yash_buf);
