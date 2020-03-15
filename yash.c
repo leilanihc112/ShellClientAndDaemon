@@ -31,6 +31,28 @@ void cleanup(char *buf);
 int rc, cc;
 int   sd;
 
+static void c_sig_handler(int signo) 
+{
+    	switch(signo)
+	{
+		case SIGINT:
+        		cleanup(buf);
+        		strcpy(buf, "CTL c\n");
+        		rc = strlen(buf);
+        		if (write(sd, buf, rc) < 0)
+            			perror("sending stream message");
+        		cleanup(buf);
+
+		case SIGTSTP:
+        		cleanup(buf);
+        		strcpy(buf, "CTL z\n");
+        		rc = strlen(buf);
+        		if (write(sd, buf, rc) < 0)
+            			perror("sending stream message");
+        		cleanup(buf);
+    	}
+}
+
 int main(int argc, char **argv ) {
     int childpid;
     struct sockaddr_in server;
@@ -106,6 +128,12 @@ int main(int argc, char **argv ) {
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
     else
 	printf("(Name is : %s)\n", hp->h_name);
+
+    if(signal(SIGINT, c_sig_handler) == SIG_ERR)
+        printf("signal(SIGINT)error");
+    if(signal(SIGTSTP, c_sig_handler) == SIG_ERR)
+        printf("signal(SIGTSTP)error");
+    
     childpid = fork();
     if (childpid == 0) {
 	GetUserInput();
@@ -130,28 +158,6 @@ int main(int argc, char **argv ) {
 	}
 	
   }
-}
-
-static void c_sig_handler(int signo) 
-{
-    	switch(signo)
-	{
-		case SIGINT:
-        		cleanup(buf);
-        		strcpy(buf, "CTL c\n");
-        		rc = strlen(buf);
-        		if (write(sd, buf, rc) < 0)
-            			perror("sending stream message");
-        		cleanup(buf);
-
-		case SIGTSTP:
-        		cleanup(buf);
-        		strcpy(buf, "CTL z\n");
-        		rc = strlen(buf);
-        		if (write(sd, buf, rc) < 0)
-            			perror("sending stream message");
-        		cleanup(buf);
-    	}
 }
 
 static void c_sig_handler_eof(int signo) 
@@ -184,10 +190,6 @@ void cleanup(char *buf)
 
 void GetUserInput()
 {
-    if(signal(SIGINT, c_sig_handler) == SIG_ERR)
-        printf("signal(SIGINT)error");
-    if(signal(SIGTSTP, c_sig_handler) == SIG_ERR)
-        printf("signal(SIGTSTP)error");
     char cmd[] = "CMD ";
     //printf("\n# ");
     //fflush(stdout);
