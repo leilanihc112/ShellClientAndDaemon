@@ -199,8 +199,8 @@ int main(int argc, char **argv ) {
     struct   sockaddr_in server;
     struct  hostent *hp, *gethostbyname();
     struct sockaddr_in from;
-    int fromlen;
-    int length;
+    unsigned int fromlen;
+    unsigned int length;
     char ThisHost[80];
     int pn;
     //int childpid;
@@ -285,7 +285,7 @@ int main(int argc, char **argv ) {
 	pthread_t thr[60];
         int i = 0;
 	//int rc_temp;
-	psd = accept(sd, (struct sockaddr *)&from, &fromlen);
+	psd = accept((int)sd, (struct sockaddr *)&from, &fromlen);
 	thread_data_t thr_data;
 	thr_data.from = from;
 	thr_data.psd = psd;
@@ -349,14 +349,14 @@ void ThreadServe(void *arg) {
 			buf[rc] = '\0';
 	    		//buf[rc-1]='\0';
 			/* ADD BACK IN LATER */
-//			write_to_log(buf, rc, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+			//write_to_log(buf, rc, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
 
 	    		//printf("Received: %s\n", buf);
 	    		//printf("From TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
 		   	//	ntohs(from.sin_port));
 	    		//printf("(Name is : %s)\n", hp->h_name);
 
-			shell_pid = getInfoTid(pthread_self())].shell_pid;
+			shell_pid = info_table[getInfoTid(pthread_self())].shell_pid;
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
 			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
 			
@@ -365,10 +365,11 @@ void ThreadServe(void *arg) {
 				size_t length = strlen("CTL ");
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length));
+			
 				//head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
-				if (strcmp(inString_cpy, "c\n") == 0)
+				if (strcmp((const char*)inString_cpy, "c\n") == 0)
 				{
-					kill(-1*head->pid, SIGINT);
+					kill(head->pid, SIGTERM);
 					if(tail->prev == NULL)
 					{
 						head = NULL;
@@ -383,13 +384,13 @@ void ThreadServe(void *arg) {
 					//break;
 
 				}
-				else if (strcmp(inString_cpy, "z\n") == 0)
+				else if (strcmp((const char*)inString_cpy, "z\n") == 0)
 				{
 					head->state = 1;
-					kill(-1*head->pid, SIGTSTP);
+					kill(head->pid, SIGTSTP);
 					//break;
 				}
-				else if (strcmp(inString_cpy, "d\n") == 0)
+				else if (strcmp((const char*)inString_cpy, "d\n") == 0)
 				{
 					struct process * current = head;
 					while (current != NULL)
@@ -401,14 +402,13 @@ void ThreadServe(void *arg) {
 					//close(psd);
 					break;
 				}
-				free(inString_cpy);
 			}
 			if(strstr(buf, "CMD ") != NULL)
 			{
 				size_t length = strlen("CMD ");
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length)); 
-				if (strcmp(inString_cpy, "exit\n") == 0)
+				if (strcmp((const char*)inString_cpy, "exit\n") == 0)
 				{
 					//close(psd);
 					break;
@@ -776,8 +776,10 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 	else
 	{
 		addProcess(str, pid, -1, bg);
-		if (!bg)
-			waitpid(head->pid, &status, WUNTRACED | WSTOPPED);
+		if (!bg){
+			
+			waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
+		}
 	}
 }
 
@@ -927,6 +929,7 @@ void parseString(char * str)
 	}
 	else if (strcmp(args[0], "exit") == 0)
 	{
+		//FIXME		
 		return;
 	}
 

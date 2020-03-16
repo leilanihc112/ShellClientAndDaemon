@@ -150,7 +150,9 @@ int main(int argc, char **argv ) {
 	}
 	if (rc > 0){
 	    rbuf[rc]='\0';
-	    printf("%s\n", rbuf);
+	    printf("%s", rbuf);
+	//printf("\nSize of rbuf: %d\n",sizeof(rbuf));
+	fflush(stdout);
 	}else {
 	    printf("Disconnected..\n");
 	    close (sd);
@@ -195,6 +197,7 @@ void GetUserInput()
     //fflush(stdout);
     for(;;) 
     {
+	fflush(stdout);
 	cleanup(buf);
 	rc = read(0, buf, sizeof(buf));
 	if (rc == 0) 
@@ -215,6 +218,7 @@ void GetUserInput()
 	rc = strlen(buf);
 	if (send(sd, buf, rc, 0) < 0)
 		perror("sending stream message");
+	fflush(stdout);
 	free(yash_buf);
     }
     printf ("EOF... exit\n");
