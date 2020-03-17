@@ -377,25 +377,29 @@ void ThreadServe(void *arg) {
 				//head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
 				if (strcmp((const char*)inString_cpy, "c\n") == 0)
 				{
-					kill(head->pid, SIGTERM);
-					if(tail->prev == NULL)
-					{
-						head = NULL;
-						tail = NULL;
-					}
-					else
-					{
-						struct process * temp = tail->prev;
-						temp->next = NULL;
-						tail = temp;
+					if (tail != NULL){
+						kill(tail->pid, SIGTERM);
+						if(tail->prev == NULL)
+						{
+							head = NULL;
+							tail = NULL;
+						}
+						else
+						{
+							struct process * temp = tail->prev;
+							temp->next = NULL;
+							tail = temp;
+						}
 					}
 					//break;
 
 				}
 				else if (strcmp((const char*)inString_cpy, "z\n") == 0)
 				{
-					head->state = 1;
-					kill(head->pid, SIGTSTP);
+					if(tail != NULL){	
+						tail->state = 1;
+						kill(tail->pid, SIGTSTP);
+					}
 					//break;
 				}
 				else if (strcmp((const char*)inString_cpy, "d\n") == 0)
@@ -880,7 +884,10 @@ void jobsMonitor()
 		if(waitpid(current->pid, &status, WNOHANG | WUNTRACED)>0)
 		{
 			current->state = 2;
-			
+
+			if(current->bg == 1){
+				removeProcesses();
+			}
 		}
 		current = current->next;
 	}
