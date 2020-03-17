@@ -45,7 +45,8 @@ static char u_pid_path[PATHMAX+1];
 
 void reusePort(int sock);
 void ThreadServe(void *arg);
-void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp);
+void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size);
+void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size);
 void parseString(char * str);
 void jobsMonitor();
 void removeProcesses();
@@ -318,6 +319,7 @@ void ThreadServe(void *arg) {
     int childpid;
     struct  hostent *hp, *gethostbyname();
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+	char* tempString;
     //char *buf_copy;
     //char **args;
 
@@ -349,8 +351,13 @@ void ThreadServe(void *arg) {
 			buf[rc] = '\0';
 	    		//buf[rc-1]='\0';
 			/* ADD BACK IN LATER */
-			//write_to_log(buf, rc, inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+			//printf("THIS IS  THE FIRST%d\n",inet_ntoa(from.sin_addr));
+			tempString = malloc(strlen(inet_ntoa(from.sin_addr))*sizeof(char));
+			strcpy(tempString, inet_ntoa(from.sin_addr));
 
+			write_to_log(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
+			dprintf(2, "%s", tempString);
+			write_to_log_2(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
 	    		//printf("Received: %s\n", buf);
 	    		//printf("From TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
 		   	//	ntohs(from.sin_port));
@@ -470,39 +477,31 @@ void reusePort(int s)
 	}
 }    
 
-void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp)
+void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size)
 {
 	//FILE *log;
 	time_t cur_time;
 	char *c_time;
-
 	cur_time = time(NULL);
 	if (cur_time == ((time_t)-1))
 	{
 		fprintf(stderr, "couldn't get current time\n");
 		return;
-	}	
-
+	}
 	/* convert to local time */
+
 	c_time = ctime(&cur_time);
 	size_t str_size = strlen(c_time);
 	c_time[strlen(c_time)-1] = '\0';
 	char yashd_str[] = " yashd[";
 	size_t yashd_size = strlen(yashd_str);
-	size_t h_addr_size = strlen(h_addr);
-	size_t port_size = sizeof(hp);
-	size_t final_size = str_size + yashd_size + h_addr_size + 5 + buf_size + port_size;
+	size_t final_size = str_size + yashd_size + 5 + buf_size + port_size;
 	char *final = calloc(final_size, sizeof(char));
 	char port[port_size];
-	sprintf(port, "%d", hp);
 
+	sprintf(port, "%d", hp);
 	strcat(final, c_time);
 	strcat(final, yashd_str);
-	strcat(final, h_addr);
-	strcat(final, ":");
-	strcat(final, port);
-	strcat(final, "] ");
-	strcat(final, buff);
 
 	while (ret != 0)
 	{
@@ -516,16 +515,57 @@ void write_to_log(char *buff, size_t buf_size, char *h_addr, int hp)
 			}
 		}
 	}
-	
-	dprintf(2, "%s\n", final);
-	
-/*	log = fopen(u_log_path, "aw");
-	if(log)
+	dprintf(2, "%s", final);
+        ret = sem_post(&my_sem);
+	if (ret != 0)
 	{
-		fwrite(final, final_size, 1, log);
+		perror("error in sem_post");
+		pthread_exit(NULL);
+	} 
+	free(final);
+}
+
+void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size)
+{
+	//FILE *log;
+	time_t cur_time;
+	char *c_time;
+	cur_time = time(NULL);
+	if (cur_time == ((time_t)-1))
+	{
+		fprintf(stderr, "couldn't get current time\n");
+		return;
 	}
-	fclose(log);
-*/
+	/* convert to local time */
+
+	c_time = ctime(&cur_time);
+	size_t str_size = strlen(c_time);
+	c_time[strlen(c_time)-1] = '\0';
+	char yashd_str[] = " yashd[";
+	size_t yashd_size = strlen(yashd_str);
+	size_t final_size = str_size + yashd_size + 5 + buf_size + port_size;
+	char *final = calloc(final_size, sizeof(char));
+	char port[port_size];
+
+
+	strcat(final, ":");
+	strcat(final, port);
+	strcat(final, "] ");
+	strcat(final, buff);
+	while (ret != 0)
+	{
+		ret = sem_wait(&my_sem);
+		if (ret != 0)
+		{
+			if (errno != EINVAL)
+			{
+				perror("error in sem_wait");
+				pthread_exit(NULL);
+			}
+		}
+	}
+	dprintf(2, "%s\n", final);
+
         ret = sem_post(&my_sem);
 	if (ret != 0)
 	{
