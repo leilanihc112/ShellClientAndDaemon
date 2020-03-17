@@ -319,7 +319,7 @@ void ThreadServe(void *arg) {
     int childpid;
     struct  hostent *hp, *gethostbyname();
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	char* tempString;
+	char* tempString, tempString2;
     //char *buf_copy;
     //char **args;
 
@@ -330,7 +330,6 @@ void ThreadServe(void *arg) {
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
     else
 	//printf("(Name is : %s)\n", hp->h_name);
-
     childpid = fork();
     if ( childpid == 0) 
     {
@@ -353,10 +352,12 @@ void ThreadServe(void *arg) {
 			/* ADD BACK IN LATER */
 			//printf("THIS IS  THE FIRST%d\n",inet_ntoa(from.sin_addr));
 			tempString = malloc(strlen(inet_ntoa(from.sin_addr))*sizeof(char));
-			strcpy(tempString, inet_ntoa(from.sin_addr));
+			//tempString = malloc(strlen(ntohs(from.sin_port))*sizeof(char));
 
+			strcpy(tempString, inet_ntoa(from.sin_addr));
+			//printf("%s\n",ntohs(from.sin_port));
 			write_to_log(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
-			dprintf(2, "%s", tempString);
+			dprintf(2, "%s:%d", tempString, ntohs(from.sin_port));
 			write_to_log_2(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
 	    		//printf("Received: %s\n", buf);
 	    		//printf("From TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
@@ -421,7 +422,7 @@ void ThreadServe(void *arg) {
 					break;
 				}
 				parseString((char *)inString_cpy);
-				removeProcesses();
+				//removeProcesses();
 				jobsMonitor();
 				//free(inString_cpy);
 			}
@@ -516,12 +517,13 @@ void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size)
 		}
 	}
 	dprintf(2, "%s", final);
+/*
         ret = sem_post(&my_sem);
 	if (ret != 0)
 	{
 		perror("error in sem_post");
 		pthread_exit(NULL);
-	} 
+	} */
 	free(final);
 }
 
@@ -548,11 +550,11 @@ void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size)
 	char port[port_size];
 
 
-	strcat(final, ":");
-	strcat(final, port);
+	//strcat(final, ":");
+	//strcat(final, port);
 	strcat(final, "] ");
 	strcat(final, buff);
-	while (ret != 0)
+/*	while (ret != 0)
 	{
 		ret = sem_wait(&my_sem);
 		if (ret != 0)
@@ -563,7 +565,7 @@ void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size)
 				pthread_exit(NULL);
 			}
 		}
-	}
+	}*/
 	dprintf(2, "%s\n", final);
 
         ret = sem_post(&my_sem);
@@ -608,7 +610,23 @@ void addProcess(char * args, int pid1, int pid2, int bg)
 		tail->next = proc;
 		proc->jobnum = tail->jobnum + 1;
 		tail = proc;
-	}
+	}/*
+if (head == NULL)
+	{
+		proc->jobnum = 1;
+		proc->next = NULL;
+		proc->prev = NULL;
+		head = proc;
+		tail = proc;
+	}	
+	else
+	{
+		proc->prev = NULL;
+		proc->next = head;
+		head->prev = proc;
+		proc->jobnum = head->jobnum + 1;
+		head = proc;
+	}*/
 }
 
 void removeProcesses()
@@ -805,11 +823,7 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
       		if (execvp(args[0], args) < 0)
       		{
           		//printf("\n");
-			/* remove from jobs list */
-			if (head->next == NULL)
-				head = NULL;
-			else
-				tail = NULL;
+			
       		}
 		//_exit(0);
 	}
@@ -819,6 +833,8 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 		if (!bg){
 			
 			waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
+			
+			tail->state = 2;
 		}
 	}
 }
@@ -829,31 +845,31 @@ void sendToBack()
 	if((head->state == 1) | (head->state == 2))
 	{
 		/* run job */
-		if (kill(head->pid, SIGCONT) < 0)
+		if (kill(tail->pid, SIGCONT) < 0)
 			perror("kill SIGCONT");
 		/* set state to running */
-		head->state = 0;
+		tail->state = 0;
 	}
-	printf("[%d]%s %s        %s\n", head->jobnum, "+", "Running", head->text);
-}
+	printf("[%d]%s %s        %s\n", tail->jobnum, "+", "Running", tail->text);
+}	//amf
 
 /* foreground */
 void bringToFront()
 {
-	tcsetpgrp(0, head->pid);
+	tcsetpgrp(0, tail->pid);
 	if((head->state == 1) | (head->state == 2))
 	{
 		/* run job */
-		if (-1*kill(head->pid, SIGCONT) < 0)
+		if (-1*kill(tail->pid, SIGCONT) < 0)
 			perror("kill SIGCONT");
 		/* set state to running */
-		head->state = 0;
+		tail->state = 0;
 	}	
 	head->bg = 0;
-	printf("%s\n", head->text);
+	printf("%s\n", tail->text);
 	//tcsetpgrp(0, shell_pid);
 	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
-	waitpid(head->pid, &status, WUNTRACED | WSTOPPED);
+	waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);//amf
 }
 
 void jobsMonitor()
@@ -861,9 +877,10 @@ void jobsMonitor()
 	struct process * current = head;
 	while(current != NULL)
 	{
-		if(waitpid(current->pid, &status, WNOHANG | WUNTRACED))
+		if(waitpid(current->pid, &status, WNOHANG | WUNTRACED)>0)
 		{
 			current->state = 2;
+			
 		}
 		current = current->next;
 	}
@@ -872,6 +889,7 @@ void jobsMonitor()
 void displayJobs()
 {
 	struct process * current = head;
+	jobsMonitor();
 	while (current != NULL)
 	{
 		/* done */
@@ -885,6 +903,23 @@ void displayJobs()
 			{
 				printf("[%d]%s %s        %s\n", current->jobnum, "-", "Done", current->text);
 			}
+
+		//remove from jobs list AMF
+			/* remove from jobs list */
+			if (current->next == NULL){
+				tail = NULL;
+			}
+			else{
+				current->next->prev = current->prev;
+			}
+			if(current->prev == NULL){
+				head = NULL;
+			}
+			else{
+				current->prev->next = current->next;
+			}
+
+
 		}
 		/* stopped */
 		else if (current->state == 1)
@@ -910,9 +945,12 @@ void displayJobs()
 				printf("[%d]%s %s     %s\n", current->jobnum, "-", "Running", current->text);
 			}
 		}
-
-		current = current->next;
+		if (current != NULL){
+			current = current->next;
+		}
 	}
+fflush(stdout);
+removeProcesses();
 }
 
 /* Parses command into strings */
