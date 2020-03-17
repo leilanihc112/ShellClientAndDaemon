@@ -333,7 +333,7 @@ void ThreadServe(void *arg) {
 			shell_pid = info_table[getInfoTid(pthread_self())].shell_pid;
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
 			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
-			
+
 			if(strstr(buf, "CTL ") != NULL)
 			{
 				size_t length = strlen("CTL ");
@@ -384,7 +384,7 @@ void ThreadServe(void *arg) {
 					break;
 				}
 				parseString((char *)inString_cpy);
-				//removeProcesses();
+				removeProcesses();
 				jobsMonitor();
 			}
 			pthread_mutex_unlock(&lock);
@@ -748,7 +748,7 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 /* background */
 void sendToBack()
 {
-	if((head->state == 1) | (head->state == 2))
+	if((tail->state == 1) | (tail->state == 2))
 	{
 		/* run job */
 		if (kill(tail->pid, SIGCONT) < 0)
@@ -763,7 +763,7 @@ void sendToBack()
 void bringToFront()
 {
 	tcsetpgrp(0, tail->pid);
-	if((head->state == 1) | (head->state == 2))
+	if((tail->state == 1) | (tail->state == 2))
 	{
 		/* run job */
 		if (-1*kill(tail->pid, SIGCONT) < 0)
@@ -771,11 +771,10 @@ void bringToFront()
 		/* set state to running */
 		tail->state = 0;
 	}	
-	head->bg = 0;
-	printf("%s\n", tail->text);
+	tail->bg = 0;
 	//tcsetpgrp(0, shell_pid);
-	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
 	waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
+	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
 }
 
 void jobsMonitor()
