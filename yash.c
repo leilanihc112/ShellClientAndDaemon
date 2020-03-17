@@ -51,6 +51,7 @@ static void c_sig_handler(int signo)
             			perror("sending stream message");
         		cleanup(buf);
     	}
+	fflush(stdout);
 }
 
 int main(int argc, char **argv ) {

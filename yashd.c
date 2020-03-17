@@ -342,24 +342,27 @@ void ThreadServe(void *arg) {
 				write_to_log(buf, rc, data);
 				if (strcmp((const char*)inString_cpy, "c\n") == 0)
 				{
-					kill(head->pid, SIGTERM);
-					if(tail->prev == NULL)
-					{
-						head = NULL;
-						tail = NULL;
+					if(tail != NULL){
+						kill(tail->pid, SIGTERM);
+						if(tail->prev == NULL)
+						{
+							head = NULL;
+							tail = NULL;
+						}
+						else
+						{
+							struct process * temp = tail->prev;
+							temp->next = NULL;
+							tail = temp;
+						}
 					}
-					else
-					{
-						struct process * temp = tail->prev;
-						temp->next = NULL;
-						tail = temp;
-					}
-
 				}
 				else if (strcmp((const char*)inString_cpy, "z\n") == 0)
 				{
-					head->state = 1;
-					kill(head->pid, SIGTSTP);
+					if(tail != NULL){
+						tail->state = 1;
+						kill(head->pid, SIGTSTP);
+					}				
 				}
 				else if (strcmp((const char*)inString_cpy, "d\n") == 0)
 				{
