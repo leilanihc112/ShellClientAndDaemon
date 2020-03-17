@@ -1,19 +1,16 @@
 /**
- * @file TCPServer-ex2.c 
+ * @file yashd.c 
  * @brief The program creates a TCP socket in
  * the inet domain and listens for connections from TCPClients, accept clients
  * into private sockets, and fork an echo process to ``serve'' the
- * client.  If [port] is not specified, the program uses any available
- * port.  
+ * client. 
  * Run as: 
- *     TCPServer-ex2 <port>
+ *     yashd
  */
 /*
 NAME:        
-SYNOPSIS:    TCPServer [port]
-
+SYNOPSIS:    yashd
 DESCRIPTION:  
-
 */
 #include <stdio.h>
 /* socket(), bind(), recv, send */
@@ -45,8 +42,7 @@ static char u_pid_path[PATHMAX+1];
 
 void reusePort(int sock);
 void ThreadServe(void *arg);
-void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size);
-void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size);
+void write_to_log(char *buff, size_t buf_size, void *arg);
 void parseString(char * str);
 void jobsMonitor();
 void removeProcesses();
@@ -69,8 +65,8 @@ struct process
 	int bg; // 0 no, 1 yes
 };
 
-struct process * head = NULL; // front of jobs
-struct process * tail = NULL; // back of jobs
+struct process * head = NULL;
+struct process * tail = NULL; 
 
 typedef struct _thread_data_t {
   	struct sockaddr_in from;
@@ -81,7 +77,6 @@ struct info_t{
     	pthread_t tid;
     	int sock;
     	int shell_pid;
-    	//int pt_pipefd[2];
 };
 
 int status, shell_pid; 
@@ -204,7 +199,6 @@ int main(int argc, char **argv ) {
     unsigned int length;
     char ThisHost[80];
     int pn;
-    //int childpid;
     uint16_t server_port = 3826;
 
     ret = sem_init(&my_sem, 0, 1);
@@ -230,18 +224,15 @@ int main(int argc, char **argv ) {
 
     unlink(u_socket_path); /* delete the socket if already existing */
     
-    /* get TCPServer1 Host information, NAME and INET ADDRESS */
+    /* get server Host information, NAME and INET ADDRESS */
     gethostname(ThisHost, MAXHOSTNAME);
     /* OR strcpy(ThisHost,"localhost"); */
     
-    //printf("----TCP/Server running at host NAME: %s\n", ThisHost);
     if  ( (hp = gethostbyname(ThisHost)) == NULL ) {
       fprintf(stderr, "Can't find host %s\n", argv[1]);
       exit(-1);
     }
     bcopy ( hp->h_addr, &(server.sin_addr), hp->h_length);
-    //printf("    (TCP/Server INET ADDRESS is: %s )\n", inet_ntoa(server.sin_addr));
-
     
     
     /** Construct name of socket */
@@ -275,7 +266,6 @@ int main(int argc, char **argv ) {
 	perror("getting socket name");
 	exit(0);
     }
-    //printf("Server Port is: %d\n", ntohs(server.sin_port));
     
     /** accept TCP connections from clients and fork a process to serve each */
     info_table = malloc(sizeof(struct info_t) * 500);
@@ -285,7 +275,6 @@ int main(int argc, char **argv ) {
 
 	pthread_t thr[60];
         int i = 0;
-	//int rc_temp;
 	psd = accept((int)sd, (struct sockaddr *)&from, &fromlen);
 	thread_data_t thr_data;
 	thr_data.from = from;
@@ -319,17 +308,10 @@ void ThreadServe(void *arg) {
     int childpid;
     struct  hostent *hp, *gethostbyname();
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	char* tempString, tempString2;
-    //char *buf_copy;
-    //char **args;
 
-    //printf("Serving %s:%d\n", inet_ntoa(from.sin_addr),
-	//   ntohs(from.sin_port));
     if ((hp = gethostbyaddr((char *)&from.sin_addr.s_addr,
 			    sizeof(from.sin_addr.s_addr),AF_INET)) == NULL)
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
-    else
-	//printf("(Name is : %s)\n", hp->h_name);
     childpid = fork();
     if ( childpid == 0) 
     {
@@ -337,8 +319,7 @@ void ThreadServe(void *arg) {
         table_index++; 
         /**  get data from  client and send it back */
         for(;;){
-		//printf("\n...server is waiting...\n");
-		printf("\n#");
+		printf("\n# ");
 	    	fflush(stdout);
 		if( (rc=recv(psd, &buf, sizeof(buf), 0)) < 0){
 	    		perror("receiving stream  message");
@@ -348,21 +329,6 @@ void ThreadServe(void *arg) {
 		if (rc > 0){
 			pthread_mutex_lock(&lock);
 			buf[rc] = '\0';
-	    		//buf[rc-1]='\0';
-			/* ADD BACK IN LATER */
-			//printf("THIS IS  THE FIRST%d\n",inet_ntoa(from.sin_addr));
-			tempString = malloc(strlen(inet_ntoa(from.sin_addr))*sizeof(char));
-			//tempString = malloc(strlen(ntohs(from.sin_port))*sizeof(char));
-
-			strcpy(tempString, inet_ntoa(from.sin_addr));
-			//printf("%s\n",ntohs(from.sin_port));
-			write_to_log(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
-			dprintf(2, "%s:%d", tempString, ntohs(from.sin_port));
-			write_to_log_2(buf, rc, ntohs(from.sin_port), sizeof(ntohs(from.sin_port)));
-	    		//printf("Received: %s\n", buf);
-	    		//printf("From TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
-		   	//	ntohs(from.sin_port));
-	    		//printf("(Name is : %s)\n", hp->h_name);
 
 			shell_pid = info_table[getInfoTid(pthread_self())].shell_pid;
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
@@ -373,34 +339,27 @@ void ThreadServe(void *arg) {
 				size_t length = strlen("CTL ");
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length));
-			
-				//head->pid = info_table[getInfoTid(pthread_self())].shell_pid;
+				write_to_log(buf, rc, data);
 				if (strcmp((const char*)inString_cpy, "c\n") == 0)
 				{
-					if (tail != NULL){
-						kill(tail->pid, SIGTERM);
-						if(tail->prev == NULL)
-						{
-							head = NULL;
-							tail = NULL;
-						}
-						else
-						{
-							struct process * temp = tail->prev;
-							temp->next = NULL;
-							tail = temp;
-						}
+					kill(head->pid, SIGTERM);
+					if(tail->prev == NULL)
+					{
+						head = NULL;
+						tail = NULL;
 					}
-					//break;
+					else
+					{
+						struct process * temp = tail->prev;
+						temp->next = NULL;
+						tail = temp;
+					}
 
 				}
 				else if (strcmp((const char*)inString_cpy, "z\n") == 0)
 				{
-					if(tail != NULL){	
-						tail->state = 1;
-						kill(tail->pid, SIGTSTP);
-					}
-					//break;
+					head->state = 1;
+					kill(head->pid, SIGTSTP);
 				}
 				else if (strcmp((const char*)inString_cpy, "d\n") == 0)
 				{
@@ -411,7 +370,6 @@ void ThreadServe(void *arg) {
 						current = current->next;
 						current->prev = NULL;
 					}
-					//close(psd);
 					break;
 				}
 			}
@@ -420,23 +378,18 @@ void ThreadServe(void *arg) {
 				size_t length = strlen("CMD ");
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length)); 
+				write_to_log((char *)inString_cpy, rc, data);
 				if (strcmp((const char*)inString_cpy, "exit\n") == 0)
 				{
-					//close(psd);
 					break;
 				}
 				parseString((char *)inString_cpy);
 				//removeProcesses();
 				jobsMonitor();
-				//free(inString_cpy);
 			}
 			pthread_mutex_unlock(&lock);
 		}
 		else {
-	    		//printf("TCP/Client: %s:%d\n", inet_ntoa(from.sin_addr),
-		   	//	ntohs(from.sin_port));
-	    		//printf("(Name is : %s)\n", hp->h_name);
-	    		//printf("Disconnected..\n");
 	    		close(psd);
 	    		exit(0);
                 }
@@ -482,31 +435,12 @@ void reusePort(int s)
 	}
 }    
 
-void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size)
+void write_to_log(char *buff, size_t buf_size, void *arg)
 {
-	//FILE *log;
 	time_t cur_time;
 	char *c_time;
-	cur_time = time(NULL);
-	if (cur_time == ((time_t)-1))
-	{
-		fprintf(stderr, "couldn't get current time\n");
-		return;
-	}
-	/* convert to local time */
-
-	c_time = ctime(&cur_time);
-	size_t str_size = strlen(c_time);
-	c_time[strlen(c_time)-1] = '\0';
-	char yashd_str[] = " yashd[";
-	size_t yashd_size = strlen(yashd_str);
-	size_t final_size = str_size + yashd_size + 5 + buf_size + port_size;
-	char *final = calloc(final_size, sizeof(char));
-	char port[port_size];
-
-	sprintf(port, "%d", hp);
-	strcat(final, c_time);
-	strcat(final, yashd_str);
+        thread_data_t *data = (thread_data_t*)arg;
+	struct sockaddr_in from = data->from;
 
 	while (ret != 0)
 	{
@@ -520,58 +454,41 @@ void write_to_log(char *buff, size_t buf_size, int hp, size_t port_size)
 			}
 		}
 	}
-	dprintf(2, "%s", final);
-/*
-        ret = sem_post(&my_sem);
-	if (ret != 0)
-	{
-		perror("error in sem_post");
-		pthread_exit(NULL);
-	} */
-	free(final);
-}
 
-void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size)
-{
-	//FILE *log;
-	time_t cur_time;
-	char *c_time;
 	cur_time = time(NULL);
 	if (cur_time == ((time_t)-1))
 	{
 		fprintf(stderr, "couldn't get current time\n");
 		return;
 	}
-	/* convert to local time */
 
+	/* convert to local time */
 	c_time = ctime(&cur_time);
 	size_t str_size = strlen(c_time);
 	c_time[strlen(c_time)-1] = '\0';
 	char yashd_str[] = " yashd[";
 	size_t yashd_size = strlen(yashd_str);
-	size_t final_size = str_size + yashd_size + 5 + buf_size + port_size;
+	size_t h_addr_size = strlen(inet_ntoa(from.sin_addr));
+	char h_addr[h_addr_size];
+	strcpy(h_addr, inet_ntoa(from.sin_addr));
+	int port_hp_int = ntohs(from.sin_port);
+	size_t port_size = sizeof(port_hp_int);
+	size_t final_size = str_size + yashd_size + h_addr_size + 5 + buf_size + port_size;
 	char *final = calloc(final_size, sizeof(char));
-	char port[port_size];
+	char port_hp[port_size];
+	sprintf(port_hp, "%d", port_hp_int);
 
-
-	//strcat(final, ":");
-	//strcat(final, port);
+	strcat(final, c_time);
+	strcat(final, yashd_str);
+	strcat(final, h_addr);
+	strcat(final, ":");
+	strcat(final, port_hp);
 	strcat(final, "] ");
+	strcat(final, ":");
 	strcat(final, buff);
-/*	while (ret != 0)
-	{
-		ret = sem_wait(&my_sem);
-		if (ret != 0)
-		{
-			if (errno != EINVAL)
-			{
-				perror("error in sem_wait");
-				pthread_exit(NULL);
-			}
-		}
-	}*/
+	
 	dprintf(2, "%s\n", final);
-
+	
         ret = sem_post(&my_sem);
 	if (ret != 0)
 	{
@@ -580,6 +497,7 @@ void write_to_log_2(char *buff, size_t buf_size, int hp, size_t port_size)
 	} 
 	free(final);
 }
+
 
 /*********************************** YASH.C PROJECT 1 **********************************************/
 
@@ -614,23 +532,7 @@ void addProcess(char * args, int pid1, int pid2, int bg)
 		tail->next = proc;
 		proc->jobnum = tail->jobnum + 1;
 		tail = proc;
-	}/*
-if (head == NULL)
-	{
-		proc->jobnum = 1;
-		proc->next = NULL;
-		proc->prev = NULL;
-		head = proc;
-		tail = proc;
-	}	
-	else
-	{
-		proc->prev = NULL;
-		proc->next = head;
-		head->prev = proc;
-		proc->jobnum = head->jobnum + 1;
-		head = proc;
-	}*/
+	}
 }
 
 void removeProcesses()
@@ -855,7 +757,7 @@ void sendToBack()
 		tail->state = 0;
 	}
 	printf("[%d]%s %s        %s\n", tail->jobnum, "+", "Running", tail->text);
-}	//amf
+}	
 
 /* foreground */
 void bringToFront()
@@ -873,7 +775,7 @@ void bringToFront()
 	printf("%s\n", tail->text);
 	//tcsetpgrp(0, shell_pid);
 	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
-	waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);//amf
+	waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
 }
 
 void jobsMonitor()
@@ -884,10 +786,7 @@ void jobsMonitor()
 		if(waitpid(current->pid, &status, WNOHANG | WUNTRACED)>0)
 		{
 			current->state = 2;
-
-			if(current->bg == 1){
-				removeProcesses();
-			}
+			
 		}
 		current = current->next;
 	}
@@ -911,7 +810,6 @@ void displayJobs()
 				printf("[%d]%s %s        %s\n", current->jobnum, "-", "Done", current->text);
 			}
 
-		//remove from jobs list AMF
 			/* remove from jobs list */
 			if (current->next == NULL){
 				tail = NULL;
@@ -1013,8 +911,8 @@ void parseString(char * str)
 		return;
 	}
 	else if (strcmp(args[0], "exit") == 0)
-	{
-		//FIXME		
+	{	
+		//fixme
 		return;
 	}
 
