@@ -34,6 +34,7 @@ DESCRIPTION:
 #define MAX_ARGS 128
 #define MAXHOSTNAME 80
 #define PATHMAX 255
+#define BUFSIZE 1024
 
 static char u_server_path[PATHMAX+1] = "/tmp";  /* default */
 static char u_socket_path[PATHMAX+1];
@@ -301,7 +302,7 @@ int main(int argc, char **argv ) {
 void ThreadServe(void *arg) {
     thread_data_t *data = (thread_data_t *)arg;
     info_table[table_index].tid = pthread_self();
-    char buf[512];
+    char buf[BUFSIZE];
     int rc;
     struct sockaddr_in from = data->from;
     int psd = data->psd;
@@ -340,7 +341,7 @@ void ThreadServe(void *arg) {
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length));
 				write_to_log(buf, rc, data);
-				if (strcmp((const char*)inString_cpy, "c\n") == 0)
+				if (strcmp((const char*)inString_cpy, "c") == 0)
 				{
 					if(tail != NULL){
 						kill(tail->pid, SIGTERM);
@@ -357,14 +358,14 @@ void ThreadServe(void *arg) {
 						}
 					}
 				}
-				else if (strcmp((const char*)inString_cpy, "z\n") == 0)
-				{
+				else if (strcmp((const char*)inString_cpy, "z") == 0)
+				{	
 					if(tail != NULL){
 						tail->state = 1;
 						kill(head->pid, SIGTSTP);
-					}				
+					}			
 				}
-				else if (strcmp((const char*)inString_cpy, "d\n") == 0)
+				else if (strcmp((const char*)inString_cpy, "d") == 0)
 				{
 					struct process * current = head;
 					while (current != NULL)
@@ -382,7 +383,7 @@ void ThreadServe(void *arg) {
 				char* inString_cpy[1+strlen(buf+length)];
 				memmove(inString_cpy, buf+length, 1+strlen(buf+length)); 
 				write_to_log((char *)inString_cpy, rc, data);
-				if (strcmp((const char*)inString_cpy, "exit\n") == 0)
+				if (strcmp((const char*)inString_cpy, "exit") == 0)
 				{
 					break;
 				}
@@ -486,8 +487,8 @@ void write_to_log(char *buff, size_t buf_size, void *arg)
 	strcat(final, h_addr);
 	strcat(final, ":");
 	strcat(final, port_hp);
-	strcat(final, "] ");
-	strcat(final, ":");
+	strcat(final, "]");
+	strcat(final, ": ");
 	strcat(final, buff);
 	
 	dprintf(2, "%s\n", final);
