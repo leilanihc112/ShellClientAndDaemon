@@ -33,24 +33,25 @@ int   sd;
 
 static void c_sig_handler(int signo) 
 {
-    	switch(signo)
-	{
-		case SIGINT:
+    /*	switch(signo)
+	{*/
+		if (signo == SIGINT){
         		cleanup(buf);
         		strcpy(buf, "CTL c");
         		rc = strlen(buf);
         		if (write(sd, buf, rc) < 0)
             			perror("sending stream message");
         		cleanup(buf);
-
-		case SIGTSTP:
+		}
+		else if (signo == SIGTSTP){
         		cleanup(buf);
         		strcpy(buf, "CTL z");
         		rc = strlen(buf);
         		if (write(sd, buf, rc) < 0)
             			perror("sending stream message");
         		cleanup(buf);
-    	}
+		}
+    /*	}*/
 	fflush(stdout);
 }
 

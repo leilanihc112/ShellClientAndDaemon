@@ -273,7 +273,6 @@ int main(int argc, char **argv ) {
     listen(sd,4);
     fromlen = sizeof(from);
     for(;;){
-
 	pthread_t thr[60];
         int i = 0;
 	psd = accept((int)sd, (struct sockaddr *)&from, &fromlen);
@@ -313,20 +312,21 @@ void ThreadServe(void *arg) {
     if ((hp = gethostbyaddr((char *)&from.sin_addr.s_addr,
 			    sizeof(from.sin_addr.s_addr),AF_INET)) == NULL)
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
-    childpid = fork();
+  /*  childpid = fork();
     if ( childpid == 0) 
-    {
+    { AMF TESTING*/
 	dup2(psd, STDOUT_FILENO);
         table_index++; 
+		printf("\n# ");
+	   	fflush(stdout);
         /**  get data from  client and send it back */
         for(;;){
-		printf("\n# ");
-	    	fflush(stdout);
 		if( (rc=recv(psd, &buf, sizeof(buf), 0)) < 0){
 	    		perror("receiving stream  message");
 	    		exit(-1);
 		}
-		info_table[table_index].shell_pid = childpid;  
+	/*	info_table[table_index].shell_pid = childpid;  AMF TESTING*/
+		info_table[table_index].shell_pid = getpid();
 		if (rc > 0){
 			pthread_mutex_lock(&lock);
 			buf[rc] = '\0';
@@ -335,7 +335,7 @@ void ThreadServe(void *arg) {
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
 			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
 
-			if(strstr(buf, "CTL ") != NULL)
+		if(strstr(buf, "CTL ") != NULL)
 			{
 				size_t length = strlen("CTL ");
 				char* inString_cpy[1+strlen(buf+length)];
@@ -376,6 +376,8 @@ void ThreadServe(void *arg) {
 					}
 					break;
 				}
+			printf("\n# ");
+	    	fflush(stdout);
 			}
 			if(strstr(buf, "CMD ") != NULL)
 			{
@@ -390,6 +392,8 @@ void ThreadServe(void *arg) {
 				parseString((char *)inString_cpy);
 				removeProcesses();
 				jobsMonitor();
+				printf("\n# ");
+	    		fflush(stdout);
 			}
 			pthread_mutex_unlock(&lock);
 		}
@@ -398,10 +402,10 @@ void ThreadServe(void *arg) {
 	    		exit(0);
                 }
 	}
-    }
+   /* }
     else {
         close(psd);
-    }
+    }*/
 }
 
 int getInfoPid(int pid)
