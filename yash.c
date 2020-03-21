@@ -37,7 +37,7 @@ static void c_sig_handler(int signo)
 	{
 		case SIGINT:
         		cleanup(buf);
-        		strcpy(buf, "CTL c\n");
+        		strcpy(buf, "CTL c");
         		rc = strlen(buf);
         		if (write(sd, buf, rc) < 0)
             			perror("sending stream message");
@@ -45,7 +45,7 @@ static void c_sig_handler(int signo)
 
 		case SIGTSTP:
         		cleanup(buf);
-        		strcpy(buf, "CTL z\n");
+        		strcpy(buf, "CTL z");
         		rc = strlen(buf);
         		if (write(sd, buf, rc) < 0)
             			perror("sending stream message");
@@ -53,6 +53,7 @@ static void c_sig_handler(int signo)
     	}
 	fflush(stdout);
 }
+
 
 int main(int argc, char **argv ) {
     int childpid;
@@ -125,14 +126,16 @@ int main(int argc, char **argv ) {
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
     else
 	printf("(Name is : %s)\n", hp->h_name);
-
+    
     if(signal(SIGINT, c_sig_handler) == SIG_ERR)
         printf("signal(SIGINT)error");
     if(signal(SIGTSTP, c_sig_handler) == SIG_ERR)
         printf("signal(SIGTSTP)error");
-    
+
     childpid = fork();
     if (childpid == 0) {
+	signal(SIGINT, SIG_IGN);
+        signal(SIGTSTP, SIG_IGN);
 	GetUserInput();
     }
     
@@ -158,26 +161,25 @@ int main(int argc, char **argv ) {
   }
 }
 
-static void c_sig_handler_eof(int signo) 
+static void c_sig_handler_eof() 
 {
-	switch(signo)
-	{
-		case 0:	 
-			cleanup(buf);
-			strcpy(buf, "CTL d\n");
-			rc = strlen(buf);
-			if (write(sd, buf, rc) < 0)
-				perror("sending stream message");
-			cleanup(buf);
+	cleanup(buf);
+	strcpy(buf, "CTL d");
+	rc = strlen(buf);
+	if (write(sd, buf, rc) < 0)
+		perror("sending stream message");
+	cleanup(buf);
+}
 
-		case 1:
-			cleanup(buf);
-			strcpy(buf, "CMD exit\n");
-			rc = strlen(buf);
-			if (write(sd, buf, rc) < 0)
-				perror("sending stream message");
-			cleanup(buf);
-	}
+static void c_sig_handler_exit() 
+{
+
+	cleanup(buf);
+	strcpy(buf, "CMD exit");
+	rc = strlen(buf);
+	if (write(sd, buf, rc) < 0)
+		perror("sending stream message");
+	cleanup(buf);
 }
 
 void cleanup(char *buf)
@@ -188,6 +190,7 @@ void cleanup(char *buf)
 
 void GetUserInput()
 {
+
     char cmd[] = "CMD ";
     for(;;) 
     {
@@ -196,14 +199,14 @@ void GetUserInput()
 	rc = read(0, buf, sizeof(buf));
 	if (rc == 0) 
 	{
-		c_sig_handler_eof(0);
+		c_sig_handler_eof();
 		break;
 	}
 	buf[rc] = '\0';
 	buf[rc-1] = '\0'; 
 	if(strcmp(buf, "exit") == 0)
 	{
-		c_sig_handler_eof(1);
+		c_sig_handler_exit();
 		break;
 	}
 	char* yash_buf = strdup(buf);
