@@ -1,9 +1,9 @@
 /**
  * @file yash.c 
  * @brief The program creates a stream socket
- * in the inet domain, Connect to TCPServer2, Get messages typed by a
- * user and Send them to TCPServer2 running on hostid Then it waits
- * for a reply from the TCPServer2 and show it back to the user, with
+ * in the inet domain, Connect to yashd, Get messages typed by a
+ * user and Send them to yashd running on hostid Then it waits
+ * for a reply from the yashd and show it back to the user, with
  * a message indicating if there is an error during the round trip 
  * Run as: 
  *   yash <hostname>
