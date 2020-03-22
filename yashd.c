@@ -276,6 +276,8 @@ int main(int argc, char **argv ) {
 	pthread_t thr[60];
         int i = 0;
 	psd = accept((int)sd, (struct sockaddr *)&from, &fromlen);
+	printf("psd is %d",psd);
+	fflush(stdout);
 	thread_data_t thr_data;
 	thr_data.from = from;
 	thr_data.psd = psd;
@@ -284,7 +286,7 @@ int main(int argc, char **argv ) {
 	{
  		fprintf(stderr, "error: pthread_create");
    	}
-		
+	table_index++;	
 	if (i >= 50)
 	{
 		i = 0;
@@ -300,7 +302,8 @@ int main(int argc, char **argv ) {
 
 void ThreadServe(void *arg) {
     thread_data_t *data = (thread_data_t *)arg;
-    info_table[table_index].tid = pthread_self();
+	int temp_table_index = table_index;
+    info_table[temp_table_index].tid = pthread_self();
     char buf[BUFSIZE];
     int rc;
     struct sockaddr_in from = data->from;
@@ -312,9 +315,10 @@ void ThreadServe(void *arg) {
 			    sizeof(from.sin_addr.s_addr),AF_INET)) == NULL)
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
 
-	dup2(psd, STDOUT_FILENO);
-	table_index++; 
-	printf("\n# ");
+	//dup2(psd, STDOUT_FILENO);
+	//table_index++; 
+	dprintf(psd,"\n# ");
+	fsync(psd);
    	fflush(stdout);
 	/**  get data from  client and send it back */
 	for(;;)
@@ -324,7 +328,7 @@ void ThreadServe(void *arg) {
 	    		perror("receiving stream  message");
 	    		exit(-1);
 		}
-		info_table[table_index].shell_pid = getpid();
+		info_table[temp_table_index].shell_pid = getpid();
 		if (rc > 0)
 		{
 			pthread_mutex_lock(&lock);
@@ -377,7 +381,8 @@ void ThreadServe(void *arg) {
 					}
 					break;
 				}
-				printf("\n# ");
+				dprintf(psd,"\n# ");
+				fsync(psd);
 	    			fflush(stdout);
 			}
 			if(strstr(buf, "CMD ") != NULL)
@@ -393,7 +398,8 @@ void ThreadServe(void *arg) {
 				parseString((char *)inString_cpy);
 				removeProcesses();
 				jobsMonitor();
-				printf("\n# ");
+				dprintf(psd,"\n# ");
+				fsync(psd);
 	    			fflush(stdout);
 			}
 			pthread_mutex_unlock(&lock);
@@ -730,6 +736,7 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 	}
 	else if (pid == 0)
 	{
+		dup2(info_table[getInfoTid(pthread_self())-1].sock, STDOUT_FILENO);
 		isFileOperator(args, argnum);
 		/* If invalid command, simply ignore it and print a new line */
       		if (execvp(args[0], args) < 0)
@@ -788,7 +795,7 @@ void jobsMonitor()
 	struct process * current = head;
 	while(current != NULL)
 	{
-		if(waitpid(current->pid, &status, WNOHANG | WUNTRACED)>0)
+		if(waitpid(current->pid, &status, WNOHANG)>0)
 		{
 			current->state = 2;
 			
@@ -808,11 +815,11 @@ void displayJobs()
 		{
 			if (current->next == NULL)
 			{
-				printf("[%d]%s %s        %s\n", current->jobnum, "+", "Done", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s        %s\n", current->jobnum, "+", "Done", current->text);
 			}
 			else
 			{
-				printf("[%d]%s %s        %s\n", current->jobnum, "-", "Done", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s        %s\n", current->jobnum, "-", "Done", current->text);
 			}
 
 			/* remove from jobs list */
@@ -836,11 +843,11 @@ void displayJobs()
 		{
 			if (current->next == NULL)
 			{
-				printf("[%d]%s %s     %s\n", current->jobnum, "+", "Stopped", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s     %s\n", current->jobnum, "+", "Stopped", current->text);
 			}
 			else
 			{
-				printf("[%d]%s %s     %s\n", current->jobnum, "-", "Stopped", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s     %s\n", current->jobnum, "-", "Stopped", current->text);
 			}
 		}
 		/* terminate */
@@ -848,11 +855,11 @@ void displayJobs()
 		{
 			if (current->next == NULL)
 			{
-				printf("[%d]%s %s     %s\n", current->jobnum, "+", "Running", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s     %s\n", current->jobnum, "+", "Running", current->text);
 			}
 			else
 			{
-				printf("[%d]%s %s     %s\n", current->jobnum, "-", "Running", current->text);
+				dprintf(info_table[getInfoTid(pthread_self())-1].sock,"[%d]%s %s     %s\n", current->jobnum, "-", "Running", current->text);
 			}
 		}
 		if (current != NULL){
