@@ -305,29 +305,28 @@ void ThreadServe(void *arg) {
     int rc;
     struct sockaddr_in from = data->from;
     int psd = data->psd;
-    int childpid;
     struct  hostent *hp, *gethostbyname();
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
     if ((hp = gethostbyaddr((char *)&from.sin_addr.s_addr,
 			    sizeof(from.sin_addr.s_addr),AF_INET)) == NULL)
 	fprintf(stderr, "Can't find host %s\n", inet_ntoa(from.sin_addr));
-  /*  childpid = fork();
-    if ( childpid == 0) 
-    { AMF TESTING*/
+
 	dup2(psd, STDOUT_FILENO);
-        table_index++; 
-		printf("\n# ");
-	   	fflush(stdout);
-        /**  get data from  client and send it back */
-        for(;;){
-		if( (rc=recv(psd, &buf, sizeof(buf), 0)) < 0){
+	table_index++; 
+	printf("\n# ");
+   	fflush(stdout);
+	/**  get data from  client and send it back */
+	for(;;)
+	{
+		if( (rc=recv(psd, &buf, sizeof(buf), 0)) < 0)
+		{
 	    		perror("receiving stream  message");
 	    		exit(-1);
 		}
-	/*	info_table[table_index].shell_pid = childpid;  AMF TESTING*/
 		info_table[table_index].shell_pid = getpid();
-		if (rc > 0){
+		if (rc > 0)
+		{
 			pthread_mutex_lock(&lock);
 			buf[rc] = '\0';
 
@@ -335,7 +334,7 @@ void ThreadServe(void *arg) {
 			setpgid(info_table[getInfoTid(pthread_self())].shell_pid, info_table[getInfoTid(pthread_self())].shell_pid);
 			tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid); 
 
-		if(strstr(buf, "CTL ") != NULL)
+			if(strstr(buf, "CTL ") != NULL)
 			{
 				size_t length = strlen("CTL ");
 				char* inString_cpy[1+strlen(buf+length)];
@@ -343,7 +342,8 @@ void ThreadServe(void *arg) {
 				write_to_log(buf, rc, data);
 				if (strcmp((const char*)inString_cpy, "c") == 0)
 				{
-					if(tail != NULL){
+					if(tail != NULL)
+					{
 						kill(tail->pid, SIGTERM);
 						if(tail->prev == NULL)
 						{
@@ -360,7 +360,8 @@ void ThreadServe(void *arg) {
 				}
 				else if (strcmp((const char*)inString_cpy, "z") == 0)
 				{	
-					if(tail != NULL){
+					if(tail != NULL)
+					{
 						tail->state = 1;
 						kill(head->pid, SIGTSTP);
 					}			
@@ -376,8 +377,8 @@ void ThreadServe(void *arg) {
 					}
 					break;
 				}
-			printf("\n# ");
-	    	fflush(stdout);
+				printf("\n# ");
+	    			fflush(stdout);
 			}
 			if(strstr(buf, "CMD ") != NULL)
 			{
@@ -393,19 +394,16 @@ void ThreadServe(void *arg) {
 				removeProcesses();
 				jobsMonitor();
 				printf("\n# ");
-	    		fflush(stdout);
+	    			fflush(stdout);
 			}
 			pthread_mutex_unlock(&lock);
 		}
-		else {
+		else 
+		{
 	    		close(psd);
 	    		exit(0);
-                }
-	}
-   /* }
-    else {
-        close(psd);
-    }*/
+		}
+    	}
 }
 
 int getInfoPid(int pid)
