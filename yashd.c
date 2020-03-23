@@ -66,8 +66,8 @@ struct process
 	int bg; // 0 no, 1 yes
 };
 
-struct process * head = NULL;
-struct process * tail = NULL; 
+//struct process * head = NULL;
+//struct process * tail = NULL; 
 
 typedef struct _thread_data_t {
   	struct sockaddr_in from;
@@ -78,6 +78,8 @@ struct info_t{
     	pthread_t tid;
     	int sock;
     	int shell_pid;
+		struct process * head;
+		struct process * tail;
 };
 
 int status, shell_pid; 
@@ -317,6 +319,10 @@ void ThreadServe(void *arg) {
 
 	//dup2(psd, STDOUT_FILENO);
 	//table_index++; 
+	/*CREATE THREAD*/
+	info_table[getInfoTid(pthread_self())].head = NULL;
+	info_table[getInfoTid(pthread_self())].tail = NULL;
+
 	dprintf(psd,"\n# ");
 	fsync(psd);
    	fflush(stdout);
@@ -346,33 +352,33 @@ void ThreadServe(void *arg) {
 				write_to_log(buf, rc, data);
 				if (strcmp((const char*)inString_cpy, "c") == 0)
 				{
-					if(tail != NULL)
+					if(info_table[getInfoTid(pthread_self())].tail != NULL)
 					{
-						kill(tail->pid, SIGTERM);
-						if(tail->prev == NULL)
+						kill(info_table[getInfoTid(pthread_self())].tail->pid, SIGTERM);
+						if(info_table[getInfoTid(pthread_self())].tail->prev == NULL)
 						{
-							head = NULL;
-							tail = NULL;
+							info_table[getInfoTid(pthread_self())].head = NULL;
+							info_table[getInfoTid(pthread_self())].tail = NULL;
 						}
 						else
 						{
-							struct process * temp = tail->prev;
+							struct process * temp = info_table[getInfoTid(pthread_self())].tail->prev;
 							temp->next = NULL;
-							tail = temp;
+							info_table[getInfoTid(pthread_self())].tail = temp;
 						}
 					}
 				}
 				else if (strcmp((const char*)inString_cpy, "z") == 0)
 				{	
-					if(tail != NULL)
+					if(info_table[getInfoTid(pthread_self())].tail != NULL)
 					{
-						tail->state = 1;
-						kill(head->pid, SIGTSTP);
+						info_table[getInfoTid(pthread_self())].tail->state = 1;
+						kill(info_table[getInfoTid(pthread_self())].head->pid, SIGTSTP);
 					}			
 				}
 				else if (strcmp((const char*)inString_cpy, "d") == 0)
 				{
-					struct process * current = head;
+					struct process * current = info_table[getInfoTid(pthread_self())].head;
 					while (current != NULL)
 					{
 						kill(-1*current->pid, SIGINT);
@@ -529,27 +535,27 @@ void addProcess(char * args, int pid1, int pid2, int bg)
 		setpgid(pid2, pid1);
 	}
 	
-	if (head == NULL)
+	if (info_table[getInfoTid(pthread_self())].head == NULL)
 	{
 		proc->jobnum = 1;
 		proc->next = NULL;
 		proc->prev = NULL;
-		head = proc;
-		tail = proc;
+		info_table[getInfoTid(pthread_self())].head = proc;
+		info_table[getInfoTid(pthread_self())].tail = proc;
 	}	
 	else
 	{
-		proc->prev = tail;
+		proc->prev = info_table[getInfoTid(pthread_self())].tail;
 		proc->next = NULL;
-		tail->next = proc;
-		proc->jobnum = tail->jobnum + 1;
-		tail = proc;
+		info_table[getInfoTid(pthread_self())].tail->next = proc;
+		proc->jobnum = info_table[getInfoTid(pthread_self())].tail->jobnum + 1;
+		info_table[getInfoTid(pthread_self())].tail = proc;
 	}
 }
 
 void removeProcesses()
 {
-	struct process * current = head;
+	struct process * current = info_table[getInfoTid(pthread_self())].head;
 	while (current != NULL)
 	{
 		if (current->state == 2)
@@ -565,13 +571,13 @@ void removeProcesses()
 				/* if only one process in list */
 				if (current->next == NULL)
 				{
-					head = NULL;
-					tail = NULL;
+					info_table[getInfoTid(pthread_self())].head = NULL;
+					info_table[getInfoTid(pthread_self())].tail = NULL;
 				}
 				else
 				{
 					current->next->prev = NULL;
-					head = current->next;
+					info_table[getInfoTid(pthread_self())].head = current->next;
 				}
 			}
 			else
@@ -585,7 +591,7 @@ void removeProcesses()
 				if (current->next == NULL)
 				{
 					current->prev->next = NULL;
-					tail = current->prev;
+					info_table[getInfoTid(pthread_self())].tail = current->prev;
 				}
 				else
 				{
@@ -751,9 +757,9 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 		addProcess(str, pid, -1, bg);
 		if (!bg){
 			
-			waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
+			waitpid(info_table[getInfoTid(pthread_self())].tail->pid, &status, WUNTRACED | WSTOPPED);
 			
-			tail->state = 2;
+			info_table[getInfoTid(pthread_self())].tail->state = 2;
 		}
 	}
 }
@@ -761,38 +767,38 @@ void executeCommand(char * args[], int argnum, char * str, int bg)
 /* background */
 void sendToBack()
 {
-	if((tail->state == 1) | (tail->state == 2))
+	if((info_table[getInfoTid(pthread_self())].tail->state == 1) | (info_table[getInfoTid(pthread_self())].tail->state == 2))
 	{
 		/* run job */
-		if (kill(tail->pid, SIGCONT) < 0)
+		if (kill(info_table[getInfoTid(pthread_self())].tail->pid, SIGCONT) < 0)
 			perror("kill SIGCONT");
 		/* set state to running */
-		tail->state = 0;
+		info_table[getInfoTid(pthread_self())].tail->state = 0;
 	}
-	printf("[%d]%s %s        %s\n", tail->jobnum, "+", "Running", tail->text);
+	printf("[%d]%s %s        %s\n", info_table[getInfoTid(pthread_self())].tail->jobnum, "+", "Running", info_table[getInfoTid(pthread_self())].tail->text);
 }	
 
 /* foreground */
 void bringToFront()
 {
-	tcsetpgrp(0, tail->pid);
-	if((tail->state == 1) | (tail->state == 2))
+	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].tail->pid);
+	if((info_table[getInfoTid(pthread_self())].tail->state == 1) | (info_table[getInfoTid(pthread_self())].tail->state == 2))
 	{
 		/* run job */
-		if (-1*kill(tail->pid, SIGCONT) < 0)
+		if (-1*kill(info_table[getInfoTid(pthread_self())].tail->pid, SIGCONT) < 0)
 			perror("kill SIGCONT");
 		/* set state to running */
-		tail->state = 0;
+		info_table[getInfoTid(pthread_self())].tail->state = 0;
 	}	
-	tail->bg = 0;
+	info_table[getInfoTid(pthread_self())].tail->bg = 0;
 	//tcsetpgrp(0, shell_pid);
-	waitpid(tail->pid, &status, WUNTRACED | WSTOPPED);
+	waitpid(info_table[getInfoTid(pthread_self())].tail->pid, &status, WUNTRACED | WSTOPPED);
 	tcsetpgrp(0, info_table[getInfoTid(pthread_self())].shell_pid);
 }
 
 void jobsMonitor()
 {
-	struct process * current = head;
+	struct process * current = info_table[getInfoTid(pthread_self())].head;
 	while(current != NULL)
 	{
 		if(waitpid(current->pid, &status, WNOHANG)>0)
@@ -806,7 +812,7 @@ void jobsMonitor()
 
 void displayJobs()
 {
-	struct process * current = head;
+	struct process * current = info_table[getInfoTid(pthread_self())].head;
 	jobsMonitor();
 	while (current != NULL)
 	{
@@ -824,13 +830,13 @@ void displayJobs()
 
 			/* remove from jobs list */
 			if (current->next == NULL){
-				tail = NULL;
+				info_table[getInfoTid(pthread_self())].tail = NULL;
 			}
 			else{
 				current->next->prev = current->prev;
 			}
 			if(current->prev == NULL){
-				head = NULL;
+				info_table[getInfoTid(pthread_self())].head = NULL;
 			}
 			else{
 				current->prev->next = current->next;
